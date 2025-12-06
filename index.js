@@ -39,7 +39,6 @@ const verifyJWT = async (req, res, next) => {
   }
 };
 
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(process.env.MONGODB_URI, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -49,19 +48,67 @@ const client = new MongoClient(process.env.MONGODB_URI, {
 });
 async function run() {
   try {
+    const db = client.db("arthi_DB");
+    const usersCollection = db.collection("users");
+
+    // save or update user
+    app.post("/users", async (req, res) => {
+      const userData = req.body;
+      userData.createdAt = new Date().toISOString();
+      userData.lastLoogedIn = new Date().toISOString();
+
+      const filter = { email: userData.email };
+      const alreadyExists = await usersCollection.findOne(filter);
+      console.log("user exist: ", alreadyExists);
+
+      if (alreadyExists) {
+        const result = await usersCollection.updateOne(filter, {
+          $set: { lastLoogedIn: new Date().toISOString() },
+        });
+        return res.send(result);
+      }
+
+      const result = await usersCollection.insertOne(userData);
+      res.send(result);
+    });
+
+    // get specific user
+    app.get("/users/:email", async (req, res) => {
+      const userEmail = req.params.email;
+      const result = await usersCollection.findOne({ email: userEmail });
+      res.send(result);
+    });
+
+    // update user name & photo
+    app.patch("/users-update", async (req, res) => {
+      const userData = req.body;
+      console.log(userData);
+      const { name, image, email } = userData;
+      console.log({ name, image, email });
+      const result = await usersCollection.updateOne(
+        { email: email },
+        {
+          $set: {
+            name: name,
+            image: image,
+          },
+        }
+      );
+      res.send(result);
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
   } finally {
-    // Ensures that the client will close when you finish/error
   }
 }
 run().catch(console.dir);
 
 app.get("/", (req, res) => {
-  res.send("Hello from Server..");
+  res.send("Arthi Server is Running!!");
 });
 
 app.listen(port, () => {
