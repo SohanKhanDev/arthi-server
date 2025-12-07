@@ -1,7 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const admin = require("firebase-admin");
 const port = process.env.PORT || 3000;
 const decoded = Buffer.from(process.env.FB_SERVICE_KEY, "base64").toString(
@@ -26,15 +26,15 @@ app.use(express.json());
 // jwt middlewares
 const verifyJWT = async (req, res, next) => {
   const token = req?.headers?.authorization?.split(" ")[1];
-  console.log(token);
+  // console.log(token);
   if (!token) return res.status(401).send({ message: "Unauthorized Access!" });
   try {
     const decoded = await admin.auth().verifyIdToken(token);
     req.tokenEmail = decoded.email;
-    console.log(decoded);
+    // console.log(decoded);
     next();
   } catch (err) {
-    console.log(err);
+    // console.log(err);
     return res.status(401).send({ message: "Unauthorized Access!", err });
   }
 };
@@ -56,6 +56,7 @@ async function run() {
       const userData = req.body;
       userData.createdAt = new Date().toISOString();
       userData.lastLoogedIn = new Date().toISOString();
+      userData.status = "pending";
 
       const filter = { email: userData.email };
       const alreadyExists = await usersCollection.findOne(filter);
@@ -79,6 +80,19 @@ async function run() {
       res.send(result);
     });
 
+    // get all user
+    app.get("/users", verifyJWT, async (req, res) => {
+      const result = await usersCollection.find().toArray();
+      res.send(result);
+    });
+
+    // get specific user
+    app.get("/db-user", verifyJWT, async (req, res) => {
+      const userEmail = req.tokenEmail;
+      const result = await usersCollection.findOne({ email: userEmail });
+      res.send(result);
+    });
+
     // update user name & photo
     app.patch("/users-update", async (req, res) => {
       const userData = req.body;
@@ -91,6 +105,68 @@ async function run() {
           $set: {
             name: name,
             image: image,
+          },
+        }
+      );
+      res.send(result);
+    });
+
+    // update user last login time
+    app.patch("/users/login-update/:id", async (req, res) => {
+      const userData = req.params.id;
+      const userID = new ObjectId(userData);
+      const result = await usersCollection.updateOne(
+        { _id: userID },
+        {
+          $set: {
+            lastLoogedIn: new Date().toISOString(),
+          },
+        }
+      );
+      res.send(result);
+    });
+
+    // update user role
+    app.patch("/update-role", async (req, res) => {
+      const userData = req.body;
+      const { email, role } = userData;
+      console.log({ email, role });
+
+      const result = await usersCollection.updateOne(
+        { email: email },
+        {
+          $set: {
+            role: role,
+          },
+        }
+      );
+      res.send(result);
+    });
+
+    // update user status to suspend
+    app.patch("/users/suspend/:id", async (req, res) => {
+      const userData = req.params.id;
+      const userID = new ObjectId(userData);
+      const result = await usersCollection.updateOne(
+        { _id: userID },
+        {
+          $set: {
+            status: "suspended",
+          },
+        }
+      );
+      res.send(result);
+    });
+
+    // update user status to suspend
+    app.patch("/users/approve/:id", async (req, res) => {
+      const userData = req.params.id;
+      const userID = new ObjectId(userData);
+      const result = await usersCollection.updateOne(
+        { _id: userID },
+        {
+          $set: {
+            status: "approved",
           },
         }
       );
