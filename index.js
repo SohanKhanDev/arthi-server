@@ -147,11 +147,14 @@ async function run() {
     app.patch("/users/suspend/:id", async (req, res) => {
       const userData = req.params.id;
       const userID = new ObjectId(userData);
+      const { suspendReason } = req.body;
+
       const result = await usersCollection.updateOne(
         { _id: userID },
         {
           $set: {
             status: "suspended",
+            suspendReason: suspendReason,
           },
         }
       );
