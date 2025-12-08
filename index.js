@@ -50,6 +50,21 @@ async function run() {
   try {
     const db = client.db("arthi_DB");
     const usersCollection = db.collection("users");
+    const loansCollection = db.collection("loans");
+
+    // add loans
+    app.post("/addloans", async (req, res) => {
+      const rcvData = req.body;
+
+      const result = await loansCollection.insertOne(rcvData);
+      res.send(result);
+    });
+
+    // get all loans
+    app.get("/loans", async (req, res) => {
+      const result = await loansCollection.find().toArray();
+      res.send(result);
+    });
 
     // save or update user
     app.post("/users", async (req, res) => {
