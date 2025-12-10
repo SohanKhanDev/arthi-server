@@ -117,11 +117,15 @@ async function run() {
       const userData = req.body;
       userData.createdAt = new Date().toISOString();
       userData.lastLoogedIn = new Date().toISOString();
-      userData.status = "pending";
+
+      if (userData.role !== "borrower") {
+        userData.status = "pending";
+      } else {
+        userData.status = "approved";
+      }
 
       const filter = { email: userData.email };
       const alreadyExists = await usersCollection.findOne(filter);
-      console.log("user exist: ", alreadyExists);
 
       if (alreadyExists) {
         const result = await usersCollection.updateOne(filter, {
