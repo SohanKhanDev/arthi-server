@@ -119,6 +119,13 @@ async function run() {
       res.send(result);
     });
 
+    // get approve application by requestBy
+    app.get("/approved-applications", async (req, res) => {
+      const filter = { status: "approved" };
+      const result = await loanApplicationsCollection.find(filter).toArray();
+      res.send(result);
+    });
+
     // update application status by requestBy
     app.patch("/application/:id", async (req, res) => {
       const rcvData = req.params.id;
