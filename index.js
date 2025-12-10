@@ -215,6 +215,7 @@ async function run() {
       res.send({ url: session.url });
     });
 
+    // payemt sucessful
     app.post("/payment-success", async (req, res) => {
       try {
         const { sessionId } = req.body;
@@ -271,7 +272,13 @@ async function run() {
 
         await loanApplicationsCollection.updateOne(
           { _id: new ObjectId(appID) },
-          { $set: { fee_status: "paid", payment_date: new Date() } }
+          {
+            $set: {
+              fee_status: "paid",
+              payment_date: new Date(),
+              transactionId,
+            },
+          }
         );
 
         res.json({
@@ -284,6 +291,17 @@ async function run() {
         console.error("Payment success error:", error);
         res.status(500).json({ error: "Payment processing failed" });
       }
+    });
+
+    // payemt info
+    app.get("/payment-info/:id", async (req, res) => {
+      const rcvData = req.params.id;
+
+      const result = await paymentReceivedCollection.findOne({
+        applicationID: rcvData,
+      });
+      console.log(result);
+      res.send(result);
     });
 
     // get all loans
