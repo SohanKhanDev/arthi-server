@@ -7,16 +7,19 @@ const port = process.env.PORT || 3000;
 const decoded = Buffer.from(process.env.FB_SERVICE_KEY, "base64").toString(
   "utf-8"
 );
+
 const serviceAccount = JSON.parse(decoded);
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
 
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+
 const app = express();
 // middleware
 app.use(
   cors({
-    origin: ["http://localhost:5173", "http://localhost:5174"],
+    origin: [process.env.CLIENT_URL],
     credentials: true,
     optionSuccessStatus: 200,
   })
@@ -52,6 +55,7 @@ async function run() {
     const usersCollection = db.collection("users");
     const loansCollection = db.collection("loans");
     const loanApplicationsCollection = db.collection("loanApplications");
+    const paymentReceivedCollection = db.collection("paymentReceived");
 
     // add loans application
     app.post("/apply-loan", async (req, res) => {
@@ -162,7 +166,7 @@ async function run() {
       res.send(result);
     });
 
-    // delete loans
+    // cancel loans
     app.patch("/loans/:id", async (req, res) => {
       const rcvID = req.params.id;
       const updateID = new ObjectId(rcvID);
@@ -174,6 +178,112 @@ async function run() {
         { $set: rcvData }
       );
       res.send(result);
+    });
+
+    // pay application fee
+    app.post("/application-fee", async (req, res) => {
+      const rcvData = req.body;
+      const appId = new ObjectId(rcvData?.applicationID);
+      const applicationDetails = await loanApplicationsCollection.findOne({
+        _id: appId,
+      });
+
+      const applicantEmail = rcvData?.applicant?.email;
+
+      const session = await stripe.checkout.sessions.create({
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              product_data: {
+                name: `${applicationDetails?.title} fee`,
+              },
+              unit_amount: 1000,
+            },
+            quantity: 1,
+          },
+        ],
+        customer_email: applicantEmail,
+        mode: "payment",
+        metadata: {
+          applicationID: rcvData?.applicationID,
+        },
+        success_url: `${process.env.CLIENT_URL}/dashboard/loan-applications/sucess-payment?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.CLIENT_URL}/dashboard/my-loans/${applicantEmail}`,
+      });
+
+      res.send({ url: session.url });
+    });
+
+    app.post("/payment-success", async (req, res) => {
+      try {
+        const { sessionId } = req.body;
+
+        if (!sessionId) {
+          return res.status(400).json({ error: "Session ID required" });
+        }
+
+        const session = await stripe.checkout.sessions.retrieve(sessionId);
+        console.log(session.status);
+
+        if (session.status !== "complete") {
+          return res.status(400).json({ error: "Payment not completed" });
+        }
+
+        const appID = session.metadata?.applicationID;
+        if (!appID) {
+          return res
+            .status(400)
+            .json({ error: "Application ID not found in metadata" });
+        }
+
+        const application = await loanApplicationsCollection.findOne({
+          _id: new ObjectId(appID),
+        });
+
+        if (!application) {
+          return res.status(404).json({ error: "Application not found" });
+        }
+
+        const existingOrder = await paymentReceivedCollection.findOne({
+          transactionId: session.payment_intent,
+        });
+
+        if (existingOrder) {
+          return res.json({
+            success: true,
+            transactionId: session.payment_intent,
+            orderId: existingOrder._id,
+            message: "Payment already processed",
+          });
+        }
+
+        const paymentInfo = {
+          applicationID: appID,
+          transactionId: session.payment_intent,
+          customer: session.customer_email,
+          amount: session.amount_total / 100,
+          paymentDate: new Date(),
+          status: "completed",
+        };
+
+        const result = await paymentReceivedCollection.insertOne(paymentInfo);
+
+        await loanApplicationsCollection.updateOne(
+          { _id: new ObjectId(appID) },
+          { $set: { fee_status: "paid", payment_date: new Date() } }
+        );
+
+        res.json({
+          success: true,
+          transactionId: session.payment_intent,
+          orderId: result.insertedId,
+          message: "Payment processed successfully",
+        });
+      } catch (error) {
+        console.error("Payment success error:", error);
+        res.status(500).json({ error: "Payment processing failed" });
+      }
     });
 
     // get all loans
