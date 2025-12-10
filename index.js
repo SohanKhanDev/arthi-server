@@ -51,6 +51,52 @@ async function run() {
     const db = client.db("arthi_DB");
     const usersCollection = db.collection("users");
     const loansCollection = db.collection("loans");
+    const loanApplicationsCollection = db.collection("loanApplications");
+
+    // add loans application
+    app.post("/apply-loan", async (req, res) => {
+      const rcvData = req.body;
+      const {
+        title,
+        interestRate,
+        first_name,
+        last_name,
+        address,
+        contact_no,
+        nid_no,
+        income_source,
+        monthly_income,
+        loan_amount,
+        loan_reason,
+        notes,
+        requestBy,
+      } = rcvData;
+
+      const applicationData = {
+        title,
+        interestRate: parseFloat(interestRate),
+        first_name,
+        last_name,
+        address,
+        contact_no,
+        nid_no,
+        income_source,
+        monthly_income: parseFloat(monthly_income),
+        loan_amount: parseFloat(loan_amount),
+        loan_reason,
+        notes,
+        status: "pending",
+        fee_status: "unpaid",
+        requestBy,
+        createdAt: new Date(),
+      };
+
+      console.log(applicationData);
+      const result = await loanApplicationsCollection.insertOne(
+        applicationData
+      );
+      res.send(result);
+    });
 
     // add loans
     app.post("/addloans", async (req, res) => {
@@ -109,6 +155,14 @@ async function run() {
     // get all loans
     app.get("/loans", async (req, res) => {
       const result = await loansCollection.find().toArray();
+      res.send(result);
+    });
+
+    // get specific loan
+    app.get("/loan/:id", async (req, res) => {
+      const rcvData = req.params.id;
+      const userID = new ObjectId(rcvData);
+      const result = await loansCollection.findOne({ _id: userID });
       res.send(result);
     });
 
