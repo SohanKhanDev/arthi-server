@@ -98,6 +98,30 @@ async function run() {
       res.send(result);
     });
 
+    // get loans application by requestBy
+    app.get("/loan-applications/:email", async (req, res) => {
+      const rcvData = req.params.email;
+      console.log(rcvData);
+      const result = await loanApplicationsCollection
+        .find({ requestBy: rcvData })
+        .toArray();
+      res.send(result);
+    });
+
+    app.patch("/application/:id", async (req, res) => {
+      const rcvData = req.params.id;
+      const appID = new ObjectId(rcvData);
+      const result = await loanApplicationsCollection.updateOne(
+        { _id: appID },
+        {
+          $set: {
+            status: "canceled",
+          },
+        }
+      );
+      res.send(result);
+    });
+
     // add loans
     app.post("/addloans", async (req, res) => {
       const rcvData = req.body;
@@ -215,9 +239,7 @@ async function run() {
     // update user name & photo
     app.patch("/users-update", async (req, res) => {
       const userData = req.body;
-      console.log(userData);
       const { name, image, email } = userData;
-      console.log({ name, image, email });
       const result = await usersCollection.updateOne(
         { email: email },
         {
