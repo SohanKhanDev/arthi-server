@@ -55,8 +55,54 @@ async function run() {
     // add loans
     app.post("/addloans", async (req, res) => {
       const rcvData = req.body;
+      const {
+        title,
+        description,
+        category,
+        interestRate,
+        maxLoanLimit,
+        requiredDocuments,
+        emiPlans,
+        showOnHome,
+        image,
+      } = rcvData;
 
-      const result = await loansCollection.insertOne(rcvData);
+      const loanData = {
+        title,
+        description,
+        category,
+        interestRate: parseFloat(interestRate),
+        maxLoanLimit: parseFloat(maxLoanLimit),
+        requiredDocuments,
+        emiPlans: parseFloat(emiPlans),
+        showOnHome,
+        image,
+        createdAt: new Date(),
+      };
+
+      const result = await loansCollection.insertOne(loanData);
+      res.send(result);
+    });
+
+    // delete loans
+    app.delete("/loans/:id", async (req, res) => {
+      const rcvData = req.params.id;
+      const deleteID = new ObjectId(rcvData);
+      const result = await loansCollection.deleteOne({ _id: deleteID });
+      res.send(result);
+    });
+
+    // delete loans
+    app.patch("/loans/:id", async (req, res) => {
+      const rcvID = req.params.id;
+      const updateID = new ObjectId(rcvID);
+
+      const rcvData = req.body;
+      console.log({ updateID, rcvData });
+      const result = await loansCollection.updateOne(
+        { _id: updateID },
+        { $set: rcvData }
+      );
       res.send(result);
     });
 
