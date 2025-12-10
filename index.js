@@ -112,14 +112,25 @@ async function run() {
       res.send(result);
     });
 
+    // get pending application by requestBy
+    app.get("/pending-applications", async (req, res) => {
+      const filter = { status: "pending" };
+      const result = await loanApplicationsCollection.find(filter).toArray();
+      res.send(result);
+    });
+
+    // update application status by requestBy
     app.patch("/application/:id", async (req, res) => {
       const rcvData = req.params.id;
       const appID = new ObjectId(rcvData);
+      const statusRcv = req.body.status;
+
+      console.log(statusRcv);
       const result = await loanApplicationsCollection.updateOne(
         { _id: appID },
         {
           $set: {
-            status: "canceled",
+            status: statusRcv,
           },
         }
       );
