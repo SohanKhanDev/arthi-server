@@ -56,6 +56,13 @@ async function run() {
     const loansCollection = db.collection("loans");
     const loanApplicationsCollection = db.collection("loanApplications");
     const paymentReceivedCollection = db.collection("paymentReceived");
+    const testtimonialsCollection = db.collection("testtimonials");
+
+    // get testtimonials data
+    app.get("/testtimonials", async (req, res) => {
+      const result = await testtimonialsCollection.find().toArray();
+      res.send(result);
+    });
 
     // add loans application
     app.post("/apply-loan", async (req, res) => {
@@ -63,6 +70,8 @@ async function run() {
       const {
         title,
         interestRate,
+        category,
+        loanId,
         first_name,
         last_name,
         address,
@@ -79,6 +88,8 @@ async function run() {
       const applicationData = {
         title,
         interestRate: parseFloat(interestRate),
+        category,
+        loanId,
         first_name,
         last_name,
         address,
@@ -123,6 +134,12 @@ async function run() {
     app.get("/approved-applications", async (req, res) => {
       const filter = { status: "approved" };
       const result = await loanApplicationsCollection.find(filter).toArray();
+      res.send(result);
+    });
+
+    // get all application
+    app.get("/all-applications", async (req, res) => {
+      const result = await loanApplicationsCollection.find().toArray();
       res.send(result);
     });
 
@@ -190,12 +207,24 @@ async function run() {
       const updateID = new ObjectId(rcvID);
 
       const rcvData = req.body;
-      console.log({ updateID, rcvData });
+
       const result = await loansCollection.updateOne(
         { _id: updateID },
         { $set: rcvData }
       );
       res.send(result);
+    });
+
+    // update appllication home display
+    app.patch("/loanHomeDisply/:id", async (req, res) => {
+      const loanId = new ObjectId(req.params.id);
+      const { showOnHome } = req.body;
+
+      const result = await loansCollection.updateOne(
+        { _id: loanId },
+        { $set: { showOnHome } }
+      );
+      res.json(result);
     });
 
     // pay application fee
@@ -243,7 +272,7 @@ async function run() {
         }
 
         const session = await stripe.checkout.sessions.retrieve(sessionId);
-        console.log(session.status);
+        console.log(session.payment_intent);
 
         if (session.status !== "complete") {
           return res.status(400).json({ error: "Payment not completed" });
@@ -265,13 +294,13 @@ async function run() {
         }
 
         const existingOrder = await paymentReceivedCollection.findOne({
-          transactionId: session.payment_intent,
+          transactionId: session?.payment_intent,
         });
 
         if (existingOrder) {
           return res.json({
             success: true,
-            transactionId: session.payment_intent,
+            transactionId: session?.payment_intent,
             orderId: existingOrder._id,
             message: "Payment already processed",
           });
@@ -279,7 +308,7 @@ async function run() {
 
         const paymentInfo = {
           applicationID: appID,
-          transactionId: session.payment_intent,
+          transactionId: session?.payment_intent,
           customer: session.customer_email,
           amount: session.amount_total / 100,
           paymentDate: new Date(),
@@ -294,7 +323,7 @@ async function run() {
             $set: {
               fee_status: "paid",
               payment_date: new Date(),
-              transactionId,
+              transactionId: paymentInfo.transactionId,
             },
           }
         );
@@ -324,7 +353,20 @@ async function run() {
 
     // get all loans
     app.get("/loans", async (req, res) => {
-      const result = await loansCollection.find().toArray();
+      const { limit = 0, skip = 0 } = req.query;
+      const result = await loansCollection
+        .find()
+        .limit(parseInt(limit))
+        .skip(parseInt(skip))
+        .toArray();
+      const count = await loansCollection.countDocuments();
+      res.send({ result, total: count });
+    });
+
+    // get all loans for home pages
+    app.get("/homepage-loans", async (req, res) => {
+      const filter = { showOnHome: true };
+      const result = await loansCollection.find(filter).limit(6).toArray();
       res.send(result);
     });
 
