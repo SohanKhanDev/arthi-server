@@ -64,6 +64,120 @@ async function run() {
       res.send(result);
     });
 
+    // dashborad statistics
+    app.get("/dashboard/stats/:email", async (req, res) => {
+      try {
+        const userEmail = req.params.email;
+        const user = await usersCollection.findOne({ email: userEmail });
+        const role = user?.role;
+
+        if (role === "admin") {
+          const totalUsers = await usersCollection.countDocuments();
+          const totalLoans = await loansCollection.countDocuments();
+          const totalApplications =
+            await loanApplicationsCollection.countDocuments();
+          const pendingApps = await loanApplicationsCollection.countDocuments({
+            status: "pending",
+          });
+          const approvedApps = await loanApplicationsCollection.countDocuments({
+            status: "approved",
+          });
+          const rejectedApps = await loanApplicationsCollection.countDocuments({
+            status: "rejected",
+          });
+          res.send({
+            totalUsers,
+            totalLoans,
+            totalApplications,
+            pendingApps,
+            approvedApps,
+            rejectedApps,
+          });
+        }
+
+        if (role === "manager") {
+          const totalLoans = await loansCollection.countDocuments();
+          const totalApplications =
+            await loanApplicationsCollection.countDocuments();
+          const pendingApps = await loanApplicationsCollection.countDocuments({
+            status: "pending",
+          });
+          const approvedApps = await loanApplicationsCollection.countDocuments({
+            status: "approved",
+          });
+          const rejectedApps = await loanApplicationsCollection.countDocuments({
+            status: "rejected",
+          });
+          res.send({
+            totalLoans,
+            totalApplications,
+            pendingApps,
+            approvedApps,
+            rejectedApps,
+          });
+        }
+
+        if (role === "borrower") {
+          const totalApplications =
+            await loanApplicationsCollection.countDocuments({
+              requestBy: userEmail,
+            });
+          const pendingApps = await loanApplicationsCollection.countDocuments({
+            status: "pending",
+            requestBy: userEmail,
+          });
+          const approvedApps = await loanApplicationsCollection.countDocuments({
+            status: "approved",
+            requestBy: userEmail,
+          });
+          const rejectedApps = await loanApplicationsCollection.countDocuments({
+            status: "rejected",
+            requestBy: userEmail,
+          });
+          res.send({
+            totalApplications,
+            pendingApps,
+            approvedApps,
+            rejectedApps,
+          });
+        }
+      } catch (error) {
+        console.error("Dashboard stats error:", error);
+        res.status(500).send({ error: "Failed to fetch stats" });
+      }
+    });
+
+    app.get("/dashboard/admin/charts", async (req, res) => {
+      try {
+        const pipeline = [
+          {
+            $group: {
+              _id: "$title",
+              count: { $sum: 1 },
+            },
+          },
+          {
+            $project: {
+              title: "$_id",
+              count: 1,
+              _id: 0,
+            },
+          },
+          {
+            $sort: { count: -1 },
+          },
+        ];
+
+        const result = await loanApplicationsCollection
+          .aggregate(pipeline)
+          .toArray();
+        res.send(result);
+      } catch (error) {
+        console.error("Chart data error:", error);
+        res.status(500).send({ error: "Data fetch failed" });
+      }
+    });
+
     // add loans application
     app.post("/apply-loan", async (req, res) => {
       const rcvData = req.body;
@@ -351,7 +465,7 @@ async function run() {
       res.send(result);
     });
 
-    // get all loans
+    // get all loans with pagination
     app.get("/loans", async (req, res) => {
       const { limit = 0, skip = 0 } = req.query;
       const result = await loansCollection
@@ -361,6 +475,12 @@ async function run() {
         .toArray();
       const count = await loansCollection.countDocuments();
       res.send({ result, total: count });
+    });
+
+    // get all loans
+    app.get("/all-loans", async (req, res) => {
+      const result = await loansCollection.find().toArray();
+      res.send(result);
     });
 
     // get all loans for home pages
