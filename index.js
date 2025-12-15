@@ -29,6 +29,7 @@ app.use(express.json());
 // jwt middlewares
 const verifyJWT = async (req, res, next) => {
   const token = req?.headers?.authorization?.split(" ")[1];
+  console.log(token);
   if (!token) return res.status(401).send({ message: "Unauthorized Access!" });
   try {
     const decoded = await admin.auth().verifyIdToken(token);
@@ -652,39 +653,34 @@ async function run() {
     });
 
     // save or update user
-    app.post(
-      "/users",
-      verifyJWT,
-      verifyRole(["borrower"]),
-      async (req, res) => {
-        try {
-          const userData = req.body;
-          userData.createdAt = new Date().toISOString();
-          userData.lastLoogedIn = new Date().toISOString();
+    app.post("/users", async (req, res) => {
+      try {
+        const userData = req.body;
+        userData.createdAt = new Date().toISOString();
+        userData.lastLoogedIn = new Date().toISOString();
 
-          if (userData.role !== "borrower") {
-            userData.status = "pending";
-          } else {
-            userData.status = "approved";
-          }
-
-          const filter = { email: userData.email };
-          const alreadyExists = await usersCollection.findOne(filter);
-
-          if (alreadyExists) {
-            const result = await usersCollection.updateOne(filter, {
-              $set: { lastLoogedIn: new Date().toISOString() },
-            });
-            return res.send(result);
-          }
-
-          const result = await usersCollection.insertOne(userData);
-          res.send(result);
-        } catch (error) {
-          res.status(500).json({ error: "Payment processing failed" });
+        if (userData.role !== "borrower") {
+          userData.status = "pending";
+        } else {
+          userData.status = "approved";
         }
+
+        const filter = { email: userData.email };
+        const alreadyExists = await usersCollection.findOne(filter);
+
+        if (alreadyExists) {
+          const result = await usersCollection.updateOne(filter, {
+            $set: { lastLoogedIn: new Date().toISOString() },
+          });
+          return res.send(result);
+        }
+
+        const result = await usersCollection.insertOne(userData);
+        res.send(result);
+      } catch (error) {
+        res.status(500).json({ error: "Payment processing failed" });
       }
-    );
+    });
 
     // get specific user
     app.get("/users/:email", async (req, res) => {
