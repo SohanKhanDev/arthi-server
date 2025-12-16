@@ -602,16 +602,20 @@ async function run() {
     // get all loans with pagination
     app.get("/loans", async (req, res) => {
       try {
-        const { limit = 0, skip = 0 } = req.query;
+        const { limit = 0, skip = 0, search = "" } = req.query;
+        let query = {};
+        if (search && search.trim()) {
+          query.title = { $regex: new RegExp(search.trim(), "i") };
+        }
         const result = await loansCollection
-          .find()
+          .find(query)
           .limit(parseInt(limit))
           .skip(parseInt(skip))
           .toArray();
-        const count = await loansCollection.countDocuments();
+        const count = await loansCollection.countDocuments(query);
         res.send({ result, total: count });
       } catch (error) {
-        console.error("Loan info data error:", error);
+        toast.error("Loan info data error:", error);
         res.status(500).send({ error: "Data fetch failed" });
       }
     });
@@ -696,8 +700,11 @@ async function run() {
 
     // get all user
     app.get("/users", verifyJWT, verifyRole(["admin"]), async (req, res) => {
+      const adminEmail = req.tokenEmail;
       try {
-        const result = await usersCollection.find().toArray();
+        const result = await usersCollection
+          .find({ email: { $ne: adminEmail } })
+          .toArray();
         res.send(result);
       } catch (error) {
         console.error("Users info data error:", error);
@@ -739,7 +746,7 @@ async function run() {
     });
 
     // update user last login time
-    app.patch("/users/login-update/:id", verifyJWT, async (req, res) => {
+    app.patch("/users/login-update/:id", async (req, res) => {
       try {
         const userData = req.params.id;
         const userID = new ObjectId(userData);
